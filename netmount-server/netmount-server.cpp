@@ -6,6 +6,7 @@
 #include "fs.hpp"
 #include "utils.hpp"
 
+#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <endian.h>
 #include <errno.h>
