@@ -528,13 +528,13 @@ std::pair<uint64_t, uint64_t> fs_space_info(const std::filesystem::path & path) 
 
 bool is_on_fat(const std::filesystem::path & path) {
 #ifdef __FreeBSD__
-  struct statfs buf;
-  if (statfs(path.c_str(), &buf) < 0) {
-    return false;
-  }
-  if (strcmp(buf.f_fstypename, "msdosfs"))
-    return false;
-  return true;
+    struct statfs buf;
+    if (statfs(path.c_str(), &buf) < 0) {
+        return false;
+    }
+    if (strcmp(buf.f_fstypename, "msdosfs"))
+        return false;
+    return true;
 #else
     auto fd = open(path.c_str(), O_RDONLY);
     if (fd == -1)
