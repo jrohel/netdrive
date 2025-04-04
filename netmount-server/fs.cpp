@@ -16,6 +16,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <format>
 #include <string>
 

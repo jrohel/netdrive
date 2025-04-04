@@ -17,6 +17,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <array>
 #include <cstdlib>
 #include <filesystem>
