@@ -616,6 +616,13 @@ static uint16_t send_request(
                 goto ignore_frame;
             }
 
+            // validate sequence number
+            if (rcv_drive_proto->sequence != seq) {
+                // The response has a different sequence number than the request.
+                // It may be a delayed response to a previous repeated request.
+                goto ignore_frame;
+            }
+
             if (rcv_drive_proto->length_flags & 0x8000) {
                 // the received data contains a checksum
                 // if enabled, check the received checksum
