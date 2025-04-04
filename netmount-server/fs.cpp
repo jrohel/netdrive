@@ -8,7 +8,11 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <linux/msdos_fs.h>
+#ifdef __FreeBSD__
+  #include <sys/mount.h> /* statfs() */
+#else
+  #include <linux/msdos_fs.h>
+#endif
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
@@ -356,18 +360,32 @@ uint8_t get_path_dos_properties(
         return FAT_ARCHIVE;
     }
 
-    // try to fetch DOS attributes from filesystem
-    auto fd = open(path.c_str(), O_RDONLY);
+    uint32_t attr;
+#ifdef __FreeBSD__
+    {
+        /* map FreeBSD to Linux */
+        attr = 0;
+        if (statbuf.st_flags & UF_READONLY)
+            attr |= 1;  /* ATTR_RO */
+        if (statbuf.st_flags & UF_HIDDEN)
+            attr |= 2;  /* ATTR_HIDDEN */
+        if (statbuf.st_flags & UF_SYSTEM)
+            attr |= 4;  /* ATTR_SYS */
+        if (statbuf.st_flags & UF_ARCHIVE)
+            attr |= 32; /* ATTR_ARCH */
+#else
+    /* try to fetch DOS attributes by calling the FAT IOCTL API */
+    auto fd = open(i, O_RDONLY);
     if (fd == -1) {
         return FAT_ERROR_ATTR;
     }
-    uint32_t attr;
     if (ioctl(fd, FAT_IOCTL_GET_ATTRIBUTES, &attr) < 0) {
         err_print("Failed to fetch attributes of \"{}\"\n", path.native());
         close(fd);
         return 0;
     } else {
         close(fd);
+#endif
         if (properties) {
             properties->attrs = attr;
         }
@@ -377,7 +395,22 @@ uint8_t get_path_dos_properties(
 
 
 void set_item_attrs(const std::filesystem::path & path, uint8_t attrs) {
-    int fd, res;
+    int res;
+#ifdef __FreeBSD__
+    /* map Linux to FreeBSD */
+    unsigned long flags = 0;
+    if (attrs & 1)  /* ATTR_RO */
+        flags |= UF_READONLY;
+    if (attrs & 2)  /* ATTR_HIDDEN */
+        flags |= UF_HIDDEN;
+    if (attrs & 4)  /* ATTR_SYS */
+        flags |= UF_SYSTEM;
+    if (attrs & 32) /* ATTR_ARCH */
+        flags |= UF_ARCHIVE;
+    res = chflags(path.c_str(), flags);
+    auto orig_errno = errno;
+#else
+    int fd;
     fd = open(path.c_str(), O_RDONLY);
     if (fd == -1) {
         throw std::runtime_error(std::format("Cannot open file: {}", strerror(errno)));
@@ -385,6 +418,7 @@ void set_item_attrs(const std::filesystem::path & path, uint8_t attrs) {
     res = ioctl(fd, FAT_IOCTL_SET_ATTRIBUTES, &attrs);
     auto orig_errno = errno;
     close(fd);
+#endif
     if (res < 0) {
         throw std::runtime_error(std::format("Cannot set file attributes: {}", strerror(orig_errno)));
     }
@@ -493,6 +527,15 @@ std::pair<uint64_t, uint64_t> fs_space_info(const std::filesystem::path & path) 
 
 
 bool is_on_fat(const std::filesystem::path & path) {
+#ifdef __FreeBSD__
+    struct statfs buf;
+    if (statfs(path.c_str(), &buf) < 0) {
+        return false;
+    }
+    if (strcmp(buf.f_fstypename, "msdosfs"))
+        return false;
+    return true;
+#else
     auto fd = open(path.c_str(), O_RDONLY);
     if (fd == -1)
         return false;
@@ -504,6 +547,7 @@ bool is_on_fat(const std::filesystem::path & path) {
     }
     close(fd);
     return true;
+#endif
 }
 
 }  // namespace netmount_srv
